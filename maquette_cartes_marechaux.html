@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Maquette — Jeu de cartes des Maréchaux (V2)</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --rouge:#B4232B;        /* coeur / carreau */
+    --noir:#1A1A1A;         /* pique / trefle  */
+    --or:#A8842C;
+    --or-clair:#C9A646;
+    --parchemin:#F5F0E6;
+    --carte-bg:#FCFAF4;
+    --encre:#211C16;
+    --gris:#8A8175;
+    --bord:#E2D9C6;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:"Hoefler Text",Georgia,"Times New Roman",serif;
+    background:
+      radial-gradient(circle at 50% -10%, #2c2620 0%, #1c1814 55%, #141009 100%);
+    color:var(--parchemin);
+    min-height:100vh;
+    padding:32px 20px 80px;
+  }
+  header{max-width:1200px;margin:0 auto 8px;text-align:center}
+  .eyebrow{
+    font-size:11px;letter-spacing:.42em;text-transform:uppercase;
+    color:var(--or-clair);margin-bottom:14px;font-family:Georgia,serif;
+  }
+  h1{
+    font-size:clamp(26px,4vw,42px);font-weight:600;line-height:1.05;
+    color:#F7F1E3;letter-spacing:.01em;
+  }
+  h1 em{font-style:italic;color:var(--or-clair)}
+  .sub{
+    margin:16px auto 0;max-width:660px;font-size:15px;line-height:1.6;
+    color:#cdc4b2;font-family:Georgia,serif;
+  }
+  .toolbar{
+    max-width:1200px;margin:30px auto 26px;display:flex;flex-wrap:wrap;
+    gap:12px;align-items:center;justify-content:center;
+    padding:16px;border:1px solid rgba(168,132,44,.3);border-radius:10px;
+    background:rgba(0,0,0,.22);
+  }
+  .toolbar .group{display:flex;gap:8px;align-items:center;flex-wrap:wrap;justify-content:center}
+  label.filter{font-size:12px;letter-spacing:.06em;color:#bcb39f;text-transform:uppercase;margin-right:2px}
+  button,select{
+    font-family:Georgia,serif;font-size:13px;cursor:pointer;
+    border:1px solid var(--or);color:#F7F1E3;background:transparent;
+    padding:9px 15px;border-radius:6px;transition:.18s;letter-spacing:.02em;
+  }
+  button:hover,select:hover{background:var(--or);color:#1c1814}
+  button.primary{background:var(--or);color:#1c1814;font-weight:600}
+  button.primary:hover{background:var(--or-clair)}
+  select{padding:8px 12px}
+  select option{background:#1c1814}
+  .count{font-size:12px;color:var(--gris);letter-spacing:.05em;width:100%;text-align:center;margin-top:4px}
+
+  .deck{
+    max-width:1240px;margin:0 auto;
+    display:grid;grid-template-columns:repeat(auto-fill,minmax(208px,1fr));
+    gap:26px 22px;justify-items:center;
+  }
+  .suit-band{
+    grid-column:1/-1;display:flex;align-items:center;gap:16px;
+    margin:26px 4px 2px;color:var(--or-clair);
+  }
+  .suit-band:first-child{margin-top:0}
+  .suit-band .line{flex:1;height:1px;background:linear-gradient(90deg,transparent,rgba(168,132,44,.5),transparent)}
+  .suit-band h2{font-size:15px;letter-spacing:.3em;text-transform:uppercase;font-family:Georgia,serif;font-weight:600;display:flex;align-items:center;gap:10px}
+  .suit-band .pip{font-size:20px}
+  .suit-band.rouge h2,.suit-band.rouge .pip{color:#E08A8F}
+  .suit-band.noir h2,.suit-band.noir .pip{color:#d8cfbb}
+
+  /* ---------- CARD ---------- */
+  .card-wrap{display:flex;flex-direction:column;align-items:center;gap:9px;width:100%}
+  .card{
+    width:208px;height:312px;border-radius:13px;position:relative;
+    background:
+      linear-gradient(135deg,#fffdf8 0%,var(--carte-bg) 55%,#F3EDDF 100%);
+    box-shadow:0 10px 22px rgba(0,0,0,.45),0 2px 4px rgba(0,0,0,.3);
+    overflow:hidden;color:var(--encre);
+    border:1px solid #d9cfba;
+    transition:transform .16s ease, box-shadow .16s ease;
+  }
+  .card:hover{transform:translateY(-5px);box-shadow:0 16px 30px rgba(0,0,0,.5)}
+  .frame{
+    position:absolute;inset:8px;border-radius:8px;
+    border:1.4px solid var(--or);
+    box-shadow:inset 0 0 0 2.4px rgba(168,132,44,.18);
+    pointer-events:none;z-index:4;
+  }
+  .frame::after{
+    content:"";position:absolute;inset:3px;border-radius:6px;
+    border:.6px solid rgba(168,132,44,.4);
+  }
+  /* corners — pip sits at a FIXED position, independent of value width */
+  .corner{position:absolute;z-index:5;width:22px;line-height:.92;font-family:"Hoefler Text",Georgia,serif}
+  .corner .val{position:absolute;top:0;left:50%;transform:translateX(-50%);font-size:23px;font-weight:700;letter-spacing:-.02em;white-space:nowrap}
+  .corner .pip{position:absolute;top:25px;left:50%;transform:translateX(-50%);font-size:18px}
+  .corner.tl{top:13px;left:13px;height:46px}
+  .corner.br{bottom:13px;right:13px;height:46px;transform:rotate(180deg)}
+  .card.rouge .corner,.card.rouge .center-pip{color:var(--rouge)}
+  .card.noir  .corner,.card.noir  .center-pip{color:var(--noir)}
+
+  /* portrait zone */
+  .portrait{
+    position:absolute;top:42px;left:30px;right:30px;height:150px;
+    border-radius:5px;overflow:hidden;z-index:3;
+    background:repeating-linear-gradient(45deg,#efe8d8,#efe8d8 7px,#e8e0cd 7px,#e8e0cd 14px);
+    border:1px solid var(--bord);
+    display:flex;align-items:center;justify-content:center;cursor:pointer;
+  }
+  .portrait img{width:100%;height:100%;object-fit:cover;display:block}
+  .portrait .ph{display:flex;flex-direction:column;align-items:center;gap:7px;color:#a99f8a;text-align:center;padding:8px}
+  .portrait .ph svg{width:34px;height:34px;opacity:.7}
+  .portrait .ph span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
+  .portrait .center-pip{font-size:60px;opacity:.10;position:absolute}
+
+  /* name plate — fixed band below portrait, text can't escape upward */
+  .nameplate{
+    position:absolute;left:16px;right:16px;top:200px;bottom:14px;z-index:5;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    text-align:center;overflow:hidden;
+  }
+  .nameplate .rule{width:70%;height:1px;background:linear-gradient(90deg,transparent,var(--or),transparent);margin:0 0 6px;flex:0 0 auto}
+  .nameplate .name{
+    font-size:12.5px;font-weight:600;line-height:1.16;color:var(--encre);
+    font-family:"Hoefler Text",Georgia,serif;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    padding:0 2px;width:100%;flex:0 0 auto;
+  }
+  .nameplate .role{
+    font-size:8.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--gris);
+    margin-top:3px;font-family:Georgia,serif;width:100%;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:0 1 auto;
+  }
+  /* editable affordances */
+  [contenteditable]{outline:none;cursor:text;border-radius:3px;transition:background .15s, box-shadow .15s}
+  .nameplate .name[contenteditable]:hover,
+  .nameplate .role[contenteditable]:hover{background:rgba(168,132,44,.10)}
+  .nameplate .name[contenteditable]:focus,
+  .nameplate .role[contenteditable]:focus{background:rgba(168,132,44,.16);box-shadow:0 0 0 1px rgba(168,132,44,.5)}
+  .nameplate .role[data-empty="1"]{color:#c5bca8;font-style:italic;text-transform:none;letter-spacing:.04em}
+  #mainTitle{padding:2px 8px;border-radius:5px}
+  #mainTitle:hover{background:rgba(168,132,44,.14)}
+  #mainTitle:focus{background:rgba(168,132,44,.2);box-shadow:0 0 0 1px rgba(168,132,44,.55)}
+  .edit-hint{font-size:11px;color:var(--gris);letter-spacing:.06em;margin-top:8px;font-family:Georgia,serif;font-style:italic}
+  .sync-badge{font-size:12px;font-family:Georgia,serif;letter-spacing:.04em;padding:7px 12px;border-radius:6px;border:1px solid transparent;white-space:nowrap}
+  .sync-ok{color:#bfe3b6;border-color:rgba(120,200,110,.45);background:rgba(80,160,70,.12)}
+  .sync-wait{color:#e8d9a8;border-color:rgba(200,170,80,.45);background:rgba(160,130,40,.12)}
+  .sync-err{color:#f0b3b3;border-color:rgba(200,90,90,.5);background:rgba(160,50,50,.14)}
+  .sync-save{color:#a8c8e8;border-color:rgba(90,140,200,.45);background:rgba(40,90,160,.14)}
+
+  /* per-card controls */
+  .card-actions{display:flex;gap:7px}
+  .card-actions button{padding:6px 11px;font-size:11.5px;border-radius:5px}
+  .card-id{font-size:10px;color:var(--gris);letter-spacing:.08em;font-family:Georgia,serif}
+
+  footer{max-width:1000px;margin:60px auto 0;text-align:center;color:var(--gris);font-size:12px;line-height:1.7;font-family:Georgia,serif}
+  footer code{color:var(--or-clair);font-size:11px}
+  .hidden-input{display:none}
+  @media print{body{background:#fff}.toolbar,header .sub,footer{display:none}}
+</style>
+</head>
+<body>
+<header>
+  <div class="eyebrow">Musée de l'Armée · Exposition Maréchaux 2027 · Maquette de travail</div>
+  <h1><span contenteditable="true" spellcheck="false" id="mainTitle" title="Cliquer pour modifier le titre">Jeu de cartes des Maréchaux</span></h1>
+  <p class="sub">Atelier de prototypage des 52 cartes (version V2). Cliquez sur le cadre d'une carte pour y déposer un portrait, puis téléchargez-la individuellement. Les emplacements vides attendent les portraits historiques (domaine public ou collections du musée).</p>
+  <p class="edit-hint">✎ Le titre ci-dessus, ainsi que le nom et la fonction de chaque carte, sont modifiables — cliquez simplement dessus pour les éditer.</p>
+</header>
+
+<div class="toolbar">
+  <div class="group">
+    <label class="filter">Couleur</label>
+    <select id="filterSuit">
+      <option value="all">Toutes</option>
+      <option value="Cœur">♥ Cœur</option>
+      <option value="Carreau">♦ Carreau</option>
+      <option value="Pique">♠ Pique</option>
+      <option value="Trèfle">♣ Trèfle</option>
+    </select>
+    <label class="filter">Catégorie</label>
+    <select id="filterCat">
+      <option value="all">Toutes</option>
+    </select>
+  </div>
+  <div class="group">
+    <button class="primary" id="dlAll">Télécharger toutes les cartes</button>
+    <button id="resetImgs">Réinitialiser les portraits</button>
+  </div>
+  <div class="group" style="gap:10px">
+    <span id="syncBadge" class="sync-badge sync-wait">● Connexion…</span>
+    <label class="filter" for="editorName" style="margin-left:6px">Votre prénom</label>
+    <input id="editorName" type="text" placeholder="ex. Antoine" maxlength="24"
+      style="font-family:Georgia,serif;font-size:13px;color:#F7F1E3;background:transparent;border:1px solid var(--or);border-radius:6px;padding:8px 12px;width:130px">
+  </div>
+  <div class="count" id="count"></div>
+</div>
+
+<div class="deck" id="deck"></div>
+
+<footer>
+  Outil de maquette — aucune image de portrait n'est fournie : vous intégrez les vôtres.<br>
+  Données issues de l'onglet <code>Jeu de 52 cartes V2</code>. Le 3 de Pique est laissé « à compléter ».<br>
+  Téléchargement au format PNG (300×450 px à l'écran, rendu haute densité ×2).
+</footer>
+
+<input type="file" id="fileInput" accept="image/*" class="hidden-input">
+
+<script>
+/* ---------- DECK DATA (exact V2) ---------- */
+const VALUES = ["As","Roi","Dame","Valet","10","9","8","7","6","5","4","3","2"];
+const SUITS = {
+  "Cœur":   {pip:"♥", cls:"rouge"},
+  "Carreau":{pip:"♦", cls:"rouge"},
+  "Pique":  {pip:"♠", cls:"noir"},
+  "Trèfle": {pip:"♣", cls:"noir"}
+};
+const ORDER = ["Cœur","Carreau","Pique","Trèfle"];
+
+/* category per value (V2 logic, from the sheet's legend) */
+const CATEGORY = {
+  "As":"Souverain / chef","Roi":"Maréchal","Dame":"Épouse","Valet":"Maréchal",
+  "10":"Maréchal","9":"Maréchal","8":"Maréchal","7":"Enfant",
+  "6":"Général","5":"Général","4":"Épouse","3":"Artiste / artisan","2":"Conseiller / artisan"
+};
+
+/* raw names from V2 — split into display name + parenthetical role */
+const DECK = {
+ "Cœur":{As:"Napoléon Ier",Roi:"Murat",Dame:"Caroline Murat",Valet:"Ney","10":"Bessières","9":"Lefebvre","8":"Moncey","7":"Napoléon-Joseph Ney (Député, général)","6":"Antoine Charles Louis de Lasalle (Murat)","5":"Louis Pierre de Monbrun (Murat)","4":"Catherine Hübscher (Lefebvre)","3":"Antoine-Jean Gros (Murat, Davout, Berthier, Victor)","2":"Nicolas-Noël Boutet (Lannes, Murat, Ney)"},
+ "Carreau":{As:"Pierre Daru",Roi:"Berthier",Dame:"Marie-Elisabeth en Bavière (Berthier)",Valet:"Lannes","10":"Macdonald","9":"Jourdan","8":"Kellermann","7":"Napoléon Alexandre Berthier (pair de France, député)","6":"Gaspard Gourgaud (Berthier)","5":"Jean-Baptiste Antoine Marcelin Marbot (Lannes)","4":"Louise-Antoinette Guéhéneuc (Lannes)","3":"Percier & Fontaine (Berthier, architectes)","2":"Pierre-Philippe Thomire (Murat, Berthier, Soult)"},
+ "Pique":{As:"Eugène de Beauharnais",Roi:"Davout",Dame:"Aimée Leclerc (Davout)",Valet:"Suchet","10":"Oudinot","9":"Victor-Perrin","8":"Mortier","7":"Charles Oudinot (Général de division, pair de France, député)","6":"Louis Friant (Davout)","5":"Charles-Etienne Gudin (Davout)","4":"Honorine de Trévise (Mortier)","3":"",  "2":"Lepage (Murat, Ney, Lannes)"},
+ "Trèfle":{As:"Charles XIII de Suède",Roi:"Bernadotte",Dame:"Désirée Clary",Valet:"Soult","10":"Masséna","9":"Marmont","8":"Brune","7":"Oscar Ier de Suède","6":"Jean-Baptiste Eblé (Bernadotte)","5":"Gabriel Molitor (Masséna, Brune)","4":"Louise Berg (Soult)","3":"François Gérard (Murat, Berthier, Ney, Bernadotte)","2":"Jacob-Desmalter (Murat, Soult, Bernadotte, Berthier)"}
+};
+
+/* split "Name (role)" → {name, role} */
+function parse(raw){
+  if(!raw) return {name:"À compléter", role:""};
+  const m = raw.match(/^(.*?)\s*\(([^)]*)\)\s*$/);
+  if(m) return {name:m[1].trim(), role:m[2].trim()};
+  return {name:raw.trim(), role:""};
+}
+
+const PIP_SVG = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 21s-7-4.5-9.3-9.2C1 8 2.8 4.5 6.3 4.5c2 0 3.2 1.1 3.7 2 .5-.9 1.7-2 3.7-2 3.5 0 5.3 3.5 3.6 7.3C19 16.5 12 21 12 21z" stroke-linejoin="round"/></svg>`;
+
+const store = {};      // cardId -> dataURL  (portraits, local cache)
+const names = {};      // cardId -> {name, role}  (current values)
+let activeCardId = null;
+
+/* ===================== SUPABASE ===================== */
+const SUPABASE_URL = "https://vsnjxaqarvkjwrszfczb.supabase.co";
+const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZzbmp4YXFhcnZrandyc3pmY3piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI4MTgwNDgsImV4cCI6MjA5ODM5NDA0OH0.PGUsTu0RtImR8MLKjFRgF8QknDU381J6P21TBuldn_w";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
+const BUCKET = "portraits";
+
+function editorName(){return (document.getElementById('editorName').value||'').trim();}
+
+function setBadge(state,text){
+  const b=document.getElementById('syncBadge');
+  b.className='sync-badge '+({ok:'sync-ok',wait:'sync-wait',err:'sync-err',save:'sync-save'}[state]||'sync-wait');
+  b.textContent=text;
+}
+let badgeTimer=null;
+function flashSaved(){
+  setBadge('save','● Enregistrement…');
+  clearTimeout(badgeTimer);
+  badgeTimer=setTimeout(()=>setBadge('ok','● Synchronisé'),700);
+}
+/* ==================================================== */
+
+const deckEl = document.getElementById('deck');
+const fileInput = document.getElementById('fileInput');
+
+function cardId(suit,val){return suit.replace(/[^A-Za-zÀ-ÿ]/g,'')+'_'+val;}
+
+/* corner labels: figures abbreviated like a real deck (A/R/D/V), numbers unchanged */
+const CORNER={"As":"A","Roi":"R","Dame":"D","Valet":"V"};
+function cornerLabel(val){return CORNER[val]||val;}
+
+function buildCard(suit,val){
+  const meta = SUITS[suit];
+  const id = cardId(suit,val);
+  const parsed = parse(DECK[suit][val]);
+  const name = (names[id] && names[id].name!==undefined) ? names[id].name : parsed.name;
+  const role = (names[id] && names[id].role!==undefined) ? names[id].role : parsed.role;
+  const cat = CATEGORY[val];
+
+  const wrap = document.createElement('div');
+  wrap.className='card-wrap';
+  wrap.dataset.suit=suit; wrap.dataset.cat=cat;
+
+  const card = document.createElement('div');
+  card.className='card '+meta.cls;
+  card.id='card_'+id;
+  card.innerHTML = `
+    <div class="frame"></div>
+    <div class="corner tl"><span class="val">${cornerLabel(val)}</span><span class="pip">${meta.pip}</span></div>
+    <div class="corner br"><span class="val">${cornerLabel(val)}</span><span class="pip">${meta.pip}</span></div>
+    <div class="portrait" data-id="${id}" title="Cliquer pour ajouter un portrait">
+      <span class="center-pip">${meta.pip}</span>
+      <div class="ph">${PIP_SVG}<span>Ajouter un portrait</span></div>
+    </div>
+    <div class="nameplate">
+      <div class="rule"></div>
+      <div class="name" contenteditable="true" spellcheck="false" data-field="name" data-id="${id}" title="Cliquer pour modifier le nom">${name}</div>
+      <div class="role" contenteditable="true" spellcheck="false" data-field="role" data-id="${id}" data-empty="${role?'0':'1'}" title="Cliquer pour modifier la fonction">${role||'Ajouter une fonction'}</div>
+    </div>`;
+
+  const actions = document.createElement('div');
+  actions.className='card-actions';
+  actions.innerHTML = `
+    <span class="card-id">${val} de ${suit}</span>
+    <button data-dl="${id}">PNG</button>`;
+
+  wrap.appendChild(card);
+  wrap.appendChild(actions);
+
+  // portrait click (but not when clicking an editable field)
+  card.querySelector('.portrait').addEventListener('click',()=>{activeCardId=id;fileInput.click();});
+  actions.querySelector('[data-dl]').addEventListener('click',()=>downloadCard(id,suit,val));
+
+  // editable name/role handlers
+  card.querySelectorAll('[contenteditable]').forEach(el=>{
+    el.addEventListener('focus',function(){
+      if(this.dataset.field==='role' && this.dataset.empty==='1'){this.textContent='';this.dataset.empty='0';}
+    });
+    el.addEventListener('blur',function(){
+      const f=this.dataset.field;
+      let txt=this.textContent.replace(/\s+/g,' ').trim();
+      if(!names[id]) names[id]={};
+      const prev=names[id][f]||'';
+      names[id][f]=txt;
+      if(f==='role' && txt===''){this.textContent='Ajouter une fonction';this.dataset.empty='1';}
+      if(txt!==prev) saveField(id,suit,val,f,txt);
+    });
+    // prevent newlines; Enter confirms
+    el.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();this.blur();}});
+  });
+  return wrap;
+}
+
+/* push one field (name|role) to Supabase */
+let suppressRealtime=false;
+async function saveField(id,suit,val,field,value){
+  flashSaved();
+  const row={card_id:id, suit, value:val, updated_at:new Date().toISOString(), updated_by:editorName()};
+  row[field]=value;
+  suppressRealtime=true;
+  const {error}=await sb.from('cartes').upsert(row,{onConflict:'card_id'});
+  setTimeout(()=>suppressRealtime=false,400);
+  if(error){console.error(error);setBadge('err','● Erreur de sauvegarde');}
+}
+
+function render(){
+  deckEl.innerHTML='';
+  const fSuit=document.getElementById('filterSuit').value;
+  const fCat=document.getElementById('filterCat').value;
+  let shown=0;
+  ORDER.forEach(suit=>{
+    if(fSuit!=='all' && suit!==fSuit) return;
+    // suit band
+    const band=document.createElement('div');
+    band.className='suit-band '+SUITS[suit].cls;
+    band.innerHTML=`<div class="line"></div><h2><span class="pip">${SUITS[suit].pip}</span> ${suit}</h2><div class="line"></div>`;
+    let bandHasCard=false;
+    const cards=[];
+    VALUES.forEach(val=>{
+      const cat=CATEGORY[val];
+      if(fCat!=='all' && cat!==fCat) return;
+      cards.push(buildCard(suit,val));
+      bandHasCard=true; shown++;
+    });
+    if(bandHasCard){deckEl.appendChild(band);cards.forEach(c=>deckEl.appendChild(c));}
+  });
+  // restore images
+  Object.keys(store).forEach(id=>applyImg(id,store[id]));
+  document.getElementById('count').textContent=`${shown} carte${shown>1?'s':''} affichée${shown>1?'s':''} sur 52`;
+}
+
+function applyImg(id,url){
+  const p=document.querySelector(`.portrait[data-id="${id}"]`);
+  if(!p) return;
+  p.innerHTML=`<img src="${url}" alt="" crossorigin="anonymous">`;
+}
+
+/* compress an image file to a max dimension, return a Blob (JPEG) */
+function compressImage(file,maxDim=900,quality=0.82){
+  return new Promise((resolve,reject)=>{
+    const img=new Image();
+    const url=URL.createObjectURL(file);
+    img.onload=()=>{
+      URL.revokeObjectURL(url);
+      let {width:w,height:h}=img;
+      if(w>h && w>maxDim){h=Math.round(h*maxDim/w);w=maxDim;}
+      else if(h>=w && h>maxDim){w=Math.round(w*maxDim/h);h=maxDim;}
+      const cv=document.createElement('canvas');cv.width=w;cv.height=h;
+      cv.getContext('2d').drawImage(img,0,0,w,h);
+      cv.toBlob(b=>b?resolve(b):reject(new Error('compression failed')),'image/jpeg',quality);
+    };
+    img.onerror=()=>{URL.revokeObjectURL(url);reject(new Error('image load failed'));};
+    img.src=url;
+  });
+}
+
+fileInput.addEventListener('change',async e=>{
+  const file=e.target.files[0];
+  const id=activeCardId;
+  fileInput.value='';
+  if(!file||!id) return;
+  // map id back to suit/value for the row
+  const meta=ID2META[id]; if(!meta){console.error('unknown card',id);return;}
+  setBadge('save','● Compression…');
+  try{
+    const blob=await compressImage(file);
+    setBadge('save','● Téléversement…');
+    const path=id+'.jpg';
+    const {error:upErr}=await sb.storage.from(BUCKET).upload(path,blob,{upsert:true,contentType:'image/jpeg',cacheControl:'3600'});
+    if(upErr) throw upErr;
+    const {data}=sb.storage.from(BUCKET).getPublicUrl(path);
+    const publicUrl=data.publicUrl+'?v='+Date.now(); // cache-bust on update
+    store[id]=publicUrl; applyImg(id,publicUrl);
+    suppressRealtime=true;
+    const {error:dbErr}=await sb.from('cartes').upsert(
+      {card_id:id,suit:meta.suit,value:meta.val,image_url:publicUrl,updated_at:new Date().toISOString(),updated_by:editorName()},
+      {onConflict:'card_id'});
+    setTimeout(()=>suppressRealtime=false,400);
+    if(dbErr) throw dbErr;
+    flashSaved();
+  }catch(err){console.error(err);setBadge('err','● Erreur image');}
+});
+
+async function downloadCard(id,suit,val){
+  const el=document.getElementById('card_'+id);
+  // hide placeholder roles during capture
+  const ph=el.querySelector('.role[data-empty="1"]');
+  if(ph) ph.style.visibility='hidden';
+  const canvas=await html2canvas(el,{scale:2,backgroundColor:null,logging:false,useCORS:true});
+  if(ph) ph.style.visibility='';
+  const a=document.createElement('a');
+  const safe=(val+'_de_'+suit).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9_]/g,'');
+  a.download='carte_'+safe+'.png';
+  a.href=canvas.toDataURL('image/png');
+  a.click();
+}
+
+document.getElementById('dlAll').addEventListener('click',async()=>{
+  const btn=document.getElementById('dlAll');
+  btn.disabled=true;const orig=btn.textContent;
+  const cards=[];
+  ORDER.forEach(suit=>VALUES.forEach(val=>cards.push([suit,val])));
+  for(let i=0;i<cards.length;i++){
+    const [suit,val]=cards[i];
+    btn.textContent=`Export… ${i+1}/52`;
+    // ensure card is in DOM (reset filters if needed)
+    let el=document.getElementById('card_'+cardId(suit,val));
+    if(!el){document.getElementById('filterSuit').value='all';document.getElementById('filterCat').value='all';render();el=document.getElementById('card_'+cardId(suit,val));}
+    await downloadCard(cardId(suit,val),suit,val);
+    await new Promise(r=>setTimeout(r,180));
+  }
+  btn.textContent=orig;btn.disabled=false;
+});
+
+document.getElementById('resetImgs').addEventListener('click',()=>{
+  alert("Les portraits sont désormais partagés avec toute l'équipe via le cloud.\n\nPour retirer un portrait précis, remplacez-le directement sur la carte concernée. La suppression groupée est désactivée pour éviter d'effacer le travail des autres.");
+});
+
+/* populate category filter */
+(function(){
+  const cats=[...new Set(Object.values(CATEGORY))];
+  const sel=document.getElementById('filterCat');
+  cats.forEach(c=>{const o=document.createElement('option');o.value=c;o.textContent=c;sel.appendChild(o);});
+})();
+
+document.getElementById('filterSuit').addEventListener('change',render);
+document.getElementById('filterCat').addEventListener('change',render);
+
+/* editor name persisted locally (per browser) */
+(function(){
+  const inp=document.getElementById('editorName');
+  inp.value=localStorage.getItem('marechaux_editor')||'';
+  inp.addEventListener('input',()=>localStorage.setItem('marechaux_editor',inp.value));
+})();
+
+/* main title: edit → save to Supabase; Enter confirms, blank restores default */
+const TITLE_FALLBACK='Jeu de cartes des Maréchaux';
+(function(){
+  const t=document.getElementById('mainTitle');
+  t.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();t.blur();}});
+  t.addEventListener('blur',async()=>{
+    let txt=t.textContent.replace(/\s+/g,' ').trim();
+    if(txt===''){txt=TITLE_FALLBACK;t.textContent=txt;}
+    flashSaved();
+    suppressRealtime=true;
+    const {error}=await sb.from('reglages').update({titre:txt,updated_at:new Date().toISOString()}).eq('id',1);
+    setTimeout(()=>suppressRealtime=false,400);
+    if(error){console.error(error);setBadge('err','● Erreur titre');}
+  });
+})();
+
+/* ---- map cardId → {suit,val} for all 52 (used by upload + realtime) ---- */
+const ID2META={};
+ORDER.forEach(suit=>VALUES.forEach(val=>{ID2META[cardId(suit,val)]={suit,val};}));
+
+/* apply a DB row into local state (names/store) */
+function applyRow(row){
+  const id=row.card_id;
+  if(!names[id]) names[id]={};
+  if(row.name!==undefined && row.name!==null) names[id].name=row.name;
+  if(row.role!==undefined && row.role!==null) names[id].role=row.role;
+  if(row.image_url){store[id]=row.image_url;}
+}
+
+/* ---- initial load from Supabase, seed if empty ---- */
+async function loadFromCloud(){
+  setBadge('wait','● Chargement…');
+  try{
+    // title
+    const {data:rg}=await sb.from('reglages').select('titre').eq('id',1).maybeSingle();
+    if(rg&&rg.titre){document.getElementById('mainTitle').textContent=rg.titre;}
+
+    let {data:rows,error}=await sb.from('cartes').select('*');
+    if(error) throw error;
+
+    if(!rows||rows.length===0){
+      // seed the 52 cards from the V2 DECK
+      setBadge('wait','● Initialisation des 52 cartes…');
+      const seed=[];
+      ORDER.forEach(suit=>VALUES.forEach(val=>{
+        const p=parse(DECK[suit][val]);
+        seed.push({card_id:cardId(suit,val),suit,value:val,name:p.name,role:p.role,image_url:''});
+      }));
+      const {error:seedErr}=await sb.from('cartes').insert(seed);
+      if(seedErr) throw seedErr;
+      rows=seed;
+    }
+    rows.forEach(applyRow);
+    render();
+    setBadge('ok','● Synchronisé');
+  }catch(err){
+    console.error(err);
+    setBadge('err','● Hors ligne (lecture seule)');
+    render(); // still show the deck from local DECK
+  }
+}
+
+/* ---- realtime: reflect others' changes live ---- */
+function subscribeRealtime(){
+  sb.channel('cartes-live')
+    .on('postgres_changes',{event:'*',schema:'public',table:'cartes'},payload=>{
+      if(suppressRealtime) return;            // ignore our own just-sent change
+      const row=payload.new; if(!row||!row.card_id) return;
+      applyRow(row);
+      // update just this card in the DOM if visible, else it'll show on next render
+      const id=row.card_id;
+      const nameEl=document.querySelector(`.name[data-id="${id}"]`);
+      if(nameEl && document.activeElement!==nameEl){nameEl.textContent=(names[id]&&names[id].name)||'';}
+      const roleEl=document.querySelector(`.role[data-id="${id}"]`);
+      if(roleEl && document.activeElement!==roleEl){
+        const r=(names[id]&&names[id].role)||'';
+        roleEl.textContent=r||'Ajouter une fonction';roleEl.dataset.empty=r?'0':'1';
+      }
+      if(row.image_url) applyImg(id,store[id]);
+      setBadge('ok','● Mise à jour reçue');
+      clearTimeout(badgeTimer);badgeTimer=setTimeout(()=>setBadge('ok','● Synchronisé'),1200);
+    })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'reglages'},payload=>{
+      if(suppressRealtime) return;
+      const t=document.getElementById('mainTitle');
+      if(payload.new&&payload.new.titre&&document.activeElement!==t){t.textContent=payload.new.titre;}
+    })
+    .subscribe();
+}
+
+loadFromCloud().then(subscribeRealtime);
+</script>
+</body>
+</html>
