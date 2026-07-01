@@ -138,6 +138,13 @@
     font-size:8.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--gris);
     margin-top:3px;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
   }
+  .nameplate .description{
+    font-size:7.5px;line-height:1.25;letter-spacing:.01em;color:#6f6656;
+    margin-top:4px;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
+  }
+  .nameplate .description[data-empty="1"]{color:#c8bfab;font-style:italic}
+  .nameplate .description[contenteditable="true"]:hover{background:rgba(168,132,44,.10)}
+  .nameplate .description[contenteditable="true"]:focus{background:rgba(168,132,44,.16);box-shadow:0 0 0 1px rgba(168,132,44,.5)}
   /* provenance / crédit image — ancré en bas, remonte si plusieurs lignes */
   .provenance{
     position:absolute;left:26px;right:26px;bottom:14px;z-index:5;
@@ -164,6 +171,17 @@
   .sync-wait{color:#e8d9a8;border-color:rgba(200,170,80,.45);background:rgba(160,130,40,.12)}
   .sync-err{color:#f0b3b3;border-color:rgba(200,90,90,.5);background:rgba(160,50,50,.14)}
   .sync-save{color:#a8c8e8;border-color:rgba(90,140,200,.45);background:rgba(40,90,160,.14)}
+  .lock-btn{font-family:Georgia,serif;font-size:12.5px;cursor:pointer;border:1px solid var(--or);color:#F7F1E3;background:transparent;padding:8px 14px;border-radius:6px;transition:.18s;white-space:nowrap}
+  .lock-btn:hover{background:var(--or);color:#1c1814}
+  .lock-btn.unlocked{border-color:rgba(120,200,110,.6);color:#bfe3b6;background:rgba(80,160,70,.12)}
+  .lock-btn.unlocked:hover{background:rgba(80,160,70,.25);color:#eafbe6}
+  /* when locked, editable fields don't show the text cursor / hover affordance */
+  body.locked [contenteditable]{cursor:default}
+  body.locked .nameplate .name[contenteditable]:hover,
+  body.locked .nameplate .role[contenteditable]:hover,
+  body.locked .provenance[contenteditable]:hover,
+  body.locked #mainTitle:hover{background:transparent;box-shadow:none}
+  body.locked .portrait{cursor:default}
 
   /* per-card controls */
   .card-actions{display:flex;gap:7px}
@@ -179,9 +197,9 @@
 <body>
 <header>
   <div class="eyebrow">Musée de l'Armée · Exposition Maréchaux 2027 · Maquette de travail</div>
-  <h1><span contenteditable="true" spellcheck="false" id="mainTitle" title="Cliquer pour modifier le titre">Jeu de cartes des Maréchaux</span></h1>
+  <h1><span contenteditable="false" spellcheck="false" id="mainTitle" title="Titre">Jeu de cartes des Maréchaux</span></h1>
   <p class="sub">Atelier de prototypage des 52 cartes (version V2). Cliquez sur le cadre d'une carte pour y déposer un portrait, puis téléchargez-la individuellement. Les emplacements vides attendent les portraits historiques (domaine public ou collections du musée).</p>
-  <p class="edit-hint">✎ Le titre ci-dessus, ainsi que le nom et la fonction de chaque carte, sont modifiables — cliquez simplement dessus pour les éditer.</p>
+  <p class="edit-hint" id="editHint">🔒 Le jeu est en <strong>mode lecture</strong> : vous pouvez consulter et télécharger les cartes. Pour modifier les noms, fonctions, portraits ou provenances, cliquez sur « Déverrouiller » et saisissez le code.</p>
 </header>
 
 <div class="toolbar">
@@ -205,9 +223,7 @@
   </div>
   <div class="group" style="gap:10px">
     <span id="syncBadge" class="sync-badge sync-wait">● Connexion…</span>
-    <label class="filter" for="editorName" style="margin-left:6px">Votre prénom</label>
-    <input id="editorName" type="text" placeholder="ex. Antoine" maxlength="24"
-      style="font-family:Georgia,serif;font-size:13px;color:#F7F1E3;background:transparent;border:1px solid var(--or);border-radius:6px;padding:8px 12px;width:130px">
+    <button id="lockBtn" class="lock-btn">🔒 Mode lecture — Déverrouiller pour modifier</button>
   </div>
   <div class="count" id="count"></div>
 </div>
@@ -268,7 +284,9 @@ const SUPABASE_ANON = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON);
 const BUCKET = "portraits";
 
-function editorName(){return (document.getElementById('editorName').value||'').trim();}
+let unlocked=false;                    // édition verrouillée par défaut
+const EDIT_CODE="1789";
+function editorName(){return '';}      // (prénom retiré; champ conservé pour compat)
 
 function setBadge(state,text){
   const b=document.getElementById('syncBadge');
@@ -298,6 +316,7 @@ function buildCard(suit,val){
   const parsed = parse(DECK[suit][val]);
   const name = (names[id] && names[id].name!==undefined) ? names[id].name : parsed.name;
   const role = (names[id] && names[id].role!==undefined) ? names[id].role : parsed.role;
+  const desc = (names[id] && names[id].description!==undefined) ? names[id].description : '';
   const prov = (names[id] && names[id].provenance!==undefined) ? names[id].provenance : '';
   const cat = CATEGORY[val];
 
@@ -318,10 +337,11 @@ function buildCard(suit,val){
     </div>
     <div class="nameplate">
       <div class="rule"></div>
-      <div class="name" contenteditable="true" spellcheck="false" data-field="name" data-id="${id}" title="Cliquer pour modifier le nom">${name}</div>
-      <div class="role" contenteditable="true" spellcheck="false" data-field="role" data-id="${id}" data-empty="${role?'0':'1'}" title="Cliquer pour modifier la fonction">${role||'Ajouter une fonction'}</div>
+      <div class="name" contenteditable="false" spellcheck="false" data-field="name" data-id="${id}" title="Nom">${name}</div>
+      <div class="role" contenteditable="false" spellcheck="false" data-field="role" data-id="${id}" data-empty="${role?'0':'1'}" title="Fonction">${role||'Ajouter une fonction'}</div>
+      <div class="description" contenteditable="false" spellcheck="false" data-field="description" data-id="${id}" data-empty="${desc?'0':'1'}" title="Description">${desc||'Ajouter une description'}</div>
     </div>
-    <div class="provenance" contenteditable="true" spellcheck="false" data-field="provenance" data-id="${id}" data-empty="${prov?'0':'1'}" title="Cliquer pour indiquer la provenance de l'image">${prov||'© provenance de l’image'}</div>`;
+    <div class="provenance" contenteditable="false" spellcheck="false" data-field="provenance" data-id="${id}" data-empty="${prov?'0':'1'}" title="Provenance de l'image">${prov||'© provenance de l’image'}</div>`;
 
   const actions = document.createElement('div');
   actions.className='card-actions';
@@ -332,13 +352,17 @@ function buildCard(suit,val){
   wrap.appendChild(card);
   wrap.appendChild(actions);
 
-  // portrait click (but not when clicking an editable field)
-  card.querySelector('.portrait').addEventListener('click',()=>{activeCardId=id;fileInput.click();});
+  // portrait click — bloqué en mode lecture
+  card.querySelector('.portrait').addEventListener('click',()=>{
+    if(!unlocked){promptUnlock();return;}
+    activeCardId=id;fileInput.click();
+  });
   actions.querySelector('[data-dl]').addEventListener('click',()=>downloadCard(id,suit,val));
 
   // editable name / role / provenance handlers
-  const PLACEHOLDER={role:'Ajouter une fonction',provenance:'© provenance de l’image'};
+  const PLACEHOLDER={role:'Ajouter une fonction',description:'Ajouter une description',provenance:'© provenance de l’image'};
   card.querySelectorAll('[contenteditable]').forEach(el=>{
+    el.setAttribute('contenteditable', unlocked?'true':'false');
     el.addEventListener('focus',function(){
       const f=this.dataset.field;
       if(PLACEHOLDER[f] && this.dataset.empty==='1'){this.textContent='';this.dataset.empty='0';}
@@ -461,7 +485,7 @@ fileInput.addEventListener('change',async e=>{
 async function downloadCard(id,suit,val){
   const el=document.getElementById('card_'+id);
   // hide empty placeholders (role + provenance) during capture
-  const phs=el.querySelectorAll('.role[data-empty="1"], .provenance[data-empty="1"]');
+  const phs=el.querySelectorAll('.role[data-empty="1"], .description[data-empty="1"], .provenance[data-empty="1"]');
   phs.forEach(p=>p.style.visibility='hidden');
   const canvas=await html2canvas(el,{scale:2,backgroundColor:null,logging:false,useCORS:true});
   phs.forEach(p=>p.style.visibility='');
@@ -503,20 +527,50 @@ document.getElementById('resetImgs').addEventListener('click',()=>{
 document.getElementById('filterSuit').addEventListener('change',render);
 document.getElementById('filterCat').addEventListener('change',render);
 
-/* editor name persisted locally (per browser) */
-(function(){
-  const inp=document.getElementById('editorName');
-  inp.value=localStorage.getItem('marechaux_editor')||'';
-  inp.addEventListener('input',()=>localStorage.setItem('marechaux_editor',inp.value));
-})();
+/* ============ VERROU D'ÉDITION (mot de passe) ============ */
+function applyLockState(){
+  document.body.classList.toggle('locked',!unlocked);
+  // toggle every editable field
+  document.querySelectorAll('[contenteditable]').forEach(el=>{
+    el.setAttribute('contenteditable', unlocked?'true':'false');
+  });
+  const btn=document.getElementById('lockBtn');
+  const hint=document.getElementById('editHint');
+  if(unlocked){
+    btn.textContent='🔓 Édition activée — cliquez pour verrouiller';
+    btn.classList.add('unlocked');
+    if(hint) hint.innerHTML='🔓 <strong>Édition activée.</strong> Cliquez sur un nom, une fonction, un titre ou un cadre pour modifier. Entrée = nouvelle ligne, Échap ou clic ailleurs = valider.';
+  }else{
+    btn.textContent='🔒 Mode lecture — Déverrouiller pour modifier';
+    btn.classList.remove('unlocked');
+    if(hint) hint.innerHTML='🔒 Le jeu est en <strong>mode lecture</strong> : vous pouvez consulter et télécharger les cartes. Pour modifier les noms, fonctions, portraits ou provenances, cliquez sur « Déverrouiller » et saisissez le code.';
+  }
+}
+function promptUnlock(){
+  if(unlocked) return true;
+  const code=prompt("Saisissez le code pour activer l'édition :");
+  if(code===null) return false;            // annulé
+  if(code.trim()===EDIT_CODE){
+    unlocked=true; applyLockState();
+    setBadge('ok','● Édition déverrouillée');
+    clearTimeout(badgeTimer);badgeTimer=setTimeout(()=>setBadge('ok','● Synchronisé'),1400);
+    return true;
+  }
+  alert('Code incorrect. Le jeu reste en mode lecture.');
+  return false;
+}
+document.getElementById('lockBtn').addEventListener('click',()=>{
+  if(unlocked){ unlocked=false; applyLockState(); setBadge('ok','● Mode lecture'); clearTimeout(badgeTimer);badgeTimer=setTimeout(()=>setBadge('ok','● Synchronisé'),1400); }
+  else{ promptUnlock(); }
+});
 
-/* main title: edit → save to Supabase; Enter confirms, blank restores default */
+/* main title: edit → save to Supabase (édition gérée par le verrou) */
 const TITLE_FALLBACK='Jeu de cartes des Maréchaux';
 (function(){
   const t=document.getElementById('mainTitle');
-  t.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();t.blur();}});
+  t.addEventListener('keydown',e=>{if(e.key==='Escape'){e.preventDefault();t.blur();}});
   t.addEventListener('blur',async()=>{
-    let txt=t.textContent.replace(/\s+/g,' ').trim();
+    let txt=t.innerText.replace(/[ \t]+/g,' ').replace(/[ \t]*\n[ \t]*/g,'\n').replace(/^\n+|\n+$/g,'').trim();
     if(txt===''){txt=TITLE_FALLBACK;t.textContent=txt;}
     flashSaved();
     suppressRealtime=true;
@@ -536,6 +590,7 @@ function applyRow(row){
   if(!names[id]) names[id]={};
   if(row.name!==undefined && row.name!==null) names[id].name=row.name;
   if(row.role!==undefined && row.role!==null) names[id].role=row.role;
+  if(row.description!==undefined && row.description!==null) names[id].description=row.description;
   if(row.provenance!==undefined && row.provenance!==null) names[id].provenance=row.provenance;
   if(row.image_url){store[id]=row.image_url;}
 }
@@ -557,7 +612,7 @@ async function loadFromCloud(){
       const seed=[];
       ORDER.forEach(suit=>VALUES.forEach(val=>{
         const p=parse(DECK[suit][val]);
-        seed.push({card_id:cardId(suit,val),suit,value:val,name:p.name,role:p.role,provenance:'',image_url:''});
+        seed.push({card_id:cardId(suit,val),suit,value:val,name:p.name,role:p.role,description:'',provenance:'',image_url:''});
       }));
       const {error:seedErr}=await sb.from('cartes').insert(seed);
       if(seedErr) throw seedErr;
@@ -594,6 +649,11 @@ function subscribeRealtime(){
         const pv=(names[id]&&names[id].provenance)||'';
         provEl.textContent=pv||'© provenance de l’image';provEl.dataset.empty=pv?'0':'1';
       }
+      const descEl=document.querySelector(`.description[data-id="${id}"]`);
+      if(descEl && document.activeElement!==descEl){
+        const dv=(names[id]&&names[id].description)||'';
+        descEl.textContent=dv||'Ajouter une description';descEl.dataset.empty=dv?'0':'1';
+      }
       if(row.image_url) applyImg(id,store[id]);
       setBadge('ok','● Mise à jour reçue');
       clearTimeout(badgeTimer);badgeTimer=setTimeout(()=>setBadge('ok','● Synchronisé'),1200);
@@ -606,6 +666,7 @@ function subscribeRealtime(){
     .subscribe();
 }
 
+applyLockState();                         // démarre en mode lecture
 loadFromCloud().then(subscribeRealtime);
 </script>
 </body>
