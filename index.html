@@ -122,34 +122,32 @@
   .portrait .ph span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
   .portrait .center-pip{font-size:60px;opacity:.10;position:absolute}
 
-  /* name plate — fixed band below portrait, text can't escape upward */
+  /* name plate — anchored to bottom, grows UPWARD so it never hits the card bottom */
   .nameplate{
-    position:absolute;left:16px;right:16px;top:200px;bottom:30px;z-index:5;
-    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
-    text-align:center;overflow:hidden;
+    position:absolute;left:16px;right:16px;bottom:34px;z-index:5;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    text-align:center;max-height:150px;overflow:hidden;
   }
   .nameplate .rule{width:70%;height:1px;background:linear-gradient(90deg,transparent,var(--or),transparent);margin:0 0 6px;flex:0 0 auto}
   .nameplate .name{
     font-size:12.5px;font-weight:600;line-height:1.16;color:var(--encre);
-    font-family:"Hoefler Text",Georgia,serif;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    font-family:"Hoefler Text",Georgia,serif;white-space:pre-wrap;
     padding:0 2px;width:100%;flex:0 0 auto;
   }
   .nameplate .role{
     font-size:8.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--gris);
-    margin-top:3px;font-family:Georgia,serif;width:100%;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:0 1 auto;
+    margin-top:3px;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
   }
-  /* provenance / crédit image — tiny line pinned at the very bottom of the card */
+  /* provenance / crédit image — en bas de carte, remonté, grandit vers le haut */
   .provenance{
-    position:absolute;left:14px;right:14px;bottom:7px;z-index:5;
+    position:absolute;left:26px;right:26px;bottom:14px;z-index:5;
     font-size:6.5px;line-height:1.2;letter-spacing:.02em;color:#9c927e;
-    font-family:Georgia,serif;font-style:italic;text-align:center;
-    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+    font-family:Georgia,serif;font-style:italic;text-align:center;white-space:pre-wrap;
+    max-height:40px;overflow:hidden;
   }
   .provenance[data-empty="1"]{color:#c8bfab}
   .provenance[contenteditable]:hover{background:rgba(168,132,44,.10)}
-  .provenance[contenteditable]:focus{background:rgba(168,132,44,.16);box-shadow:0 0 0 1px rgba(168,132,44,.5);-webkit-line-clamp:4}
+  .provenance[contenteditable]:focus{background:rgba(168,132,44,.16);box-shadow:0 0 0 1px rgba(168,132,44,.5);max-height:none}
   /* editable affordances */
   [contenteditable]{outline:none;cursor:text;border-radius:3px;transition:background .15s, box-shadow .15s}
   .nameplate .name[contenteditable]:hover,
@@ -347,15 +345,23 @@ function buildCard(suit,val){
     });
     el.addEventListener('blur',function(){
       const f=this.dataset.field;
-      let txt=this.textContent.replace(/\s+/g,' ').trim();
+      // preserve line breaks; collapse only spaces/tabs; trim outer blank lines
+      let txt=this.innerText.replace(/[ \t]+/g,' ')
+                            .replace(/[ \t]*\n[ \t]*/g,'\n')
+                            .replace(/\n{3,}/g,'\n\n')
+                            .replace(/^\n+|\n+$/g,'').trim();
       if(!names[id]) names[id]={};
       const prev=names[id][f]||'';
       names[id][f]=txt;
-      if(PLACEHOLDER[f] && txt===''){this.textContent=PLACEHOLDER[f];this.dataset.empty='1';}
+      // normalize displayed text to the cleaned value (so DOM matches what we saved)
+      if(txt==='' && PLACEHOLDER[f]){this.textContent=PLACEHOLDER[f];this.dataset.empty='1';}
+      else{this.textContent=txt;this.dataset.empty='0';}
       if(txt!==prev) saveField(id,suit,val,f,txt);
     });
-    // prevent newlines; Enter confirms
-    el.addEventListener('keydown',function(e){if(e.key==='Enter'){e.preventDefault();this.blur();}});
+    // Enter = new line ; Escape = validate (blur)
+    el.addEventListener('keydown',function(e){
+      if(e.key==='Escape'){e.preventDefault();this.blur();}
+    });
   });
   return wrap;
 }
