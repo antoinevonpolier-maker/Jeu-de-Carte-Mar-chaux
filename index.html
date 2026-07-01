@@ -124,7 +124,7 @@
 
   /* name plate — fixed band below portrait, text can't escape upward */
   .nameplate{
-    position:absolute;left:16px;right:16px;top:200px;bottom:14px;z-index:5;
+    position:absolute;left:16px;right:16px;top:200px;bottom:30px;z-index:5;
     display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
     text-align:center;overflow:hidden;
   }
@@ -140,6 +140,16 @@
     margin-top:3px;font-family:Georgia,serif;width:100%;
     display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;flex:0 1 auto;
   }
+  /* provenance / crédit image — tiny line pinned at the very bottom of the card */
+  .provenance{
+    position:absolute;left:14px;right:14px;bottom:7px;z-index:5;
+    font-size:6.5px;line-height:1.2;letter-spacing:.02em;color:#9c927e;
+    font-family:Georgia,serif;font-style:italic;text-align:center;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;
+  }
+  .provenance[data-empty="1"]{color:#c8bfab}
+  .provenance[contenteditable]:hover{background:rgba(168,132,44,.10)}
+  .provenance[contenteditable]:focus{background:rgba(168,132,44,.16);box-shadow:0 0 0 1px rgba(168,132,44,.5);-webkit-line-clamp:4}
   /* editable affordances */
   [contenteditable]{outline:none;cursor:text;border-radius:3px;transition:background .15s, box-shadow .15s}
   .nameplate .name[contenteditable]:hover,
@@ -290,6 +300,7 @@ function buildCard(suit,val){
   const parsed = parse(DECK[suit][val]);
   const name = (names[id] && names[id].name!==undefined) ? names[id].name : parsed.name;
   const role = (names[id] && names[id].role!==undefined) ? names[id].role : parsed.role;
+  const prov = (names[id] && names[id].provenance!==undefined) ? names[id].provenance : '';
   const cat = CATEGORY[val];
 
   const wrap = document.createElement('div');
@@ -311,7 +322,8 @@ function buildCard(suit,val){
       <div class="rule"></div>
       <div class="name" contenteditable="true" spellcheck="false" data-field="name" data-id="${id}" title="Cliquer pour modifier le nom">${name}</div>
       <div class="role" contenteditable="true" spellcheck="false" data-field="role" data-id="${id}" data-empty="${role?'0':'1'}" title="Cliquer pour modifier la fonction">${role||'Ajouter une fonction'}</div>
-    </div>`;
+    </div>
+    <div class="provenance" contenteditable="true" spellcheck="false" data-field="provenance" data-id="${id}" data-empty="${prov?'0':'1'}" title="Cliquer pour indiquer la provenance de l'image">${prov||'© provenance de l’image'}</div>`;
 
   const actions = document.createElement('div');
   actions.className='card-actions';
@@ -326,10 +338,12 @@ function buildCard(suit,val){
   card.querySelector('.portrait').addEventListener('click',()=>{activeCardId=id;fileInput.click();});
   actions.querySelector('[data-dl]').addEventListener('click',()=>downloadCard(id,suit,val));
 
-  // editable name/role handlers
+  // editable name / role / provenance handlers
+  const PLACEHOLDER={role:'Ajouter une fonction',provenance:'© provenance de l’image'};
   card.querySelectorAll('[contenteditable]').forEach(el=>{
     el.addEventListener('focus',function(){
-      if(this.dataset.field==='role' && this.dataset.empty==='1'){this.textContent='';this.dataset.empty='0';}
+      const f=this.dataset.field;
+      if(PLACEHOLDER[f] && this.dataset.empty==='1'){this.textContent='';this.dataset.empty='0';}
     });
     el.addEventListener('blur',function(){
       const f=this.dataset.field;
@@ -337,7 +351,7 @@ function buildCard(suit,val){
       if(!names[id]) names[id]={};
       const prev=names[id][f]||'';
       names[id][f]=txt;
-      if(f==='role' && txt===''){this.textContent='Ajouter une fonction';this.dataset.empty='1';}
+      if(PLACEHOLDER[f] && txt===''){this.textContent=PLACEHOLDER[f];this.dataset.empty='1';}
       if(txt!==prev) saveField(id,suit,val,f,txt);
     });
     // prevent newlines; Enter confirms
@@ -440,11 +454,11 @@ fileInput.addEventListener('change',async e=>{
 
 async function downloadCard(id,suit,val){
   const el=document.getElementById('card_'+id);
-  // hide placeholder roles during capture
-  const ph=el.querySelector('.role[data-empty="1"]');
-  if(ph) ph.style.visibility='hidden';
+  // hide empty placeholders (role + provenance) during capture
+  const phs=el.querySelectorAll('.role[data-empty="1"], .provenance[data-empty="1"]');
+  phs.forEach(p=>p.style.visibility='hidden');
   const canvas=await html2canvas(el,{scale:2,backgroundColor:null,logging:false,useCORS:true});
-  if(ph) ph.style.visibility='';
+  phs.forEach(p=>p.style.visibility='');
   const a=document.createElement('a');
   const safe=(val+'_de_'+suit).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/[^A-Za-z0-9_]/g,'');
   a.download='carte_'+safe+'.png';
@@ -516,6 +530,7 @@ function applyRow(row){
   if(!names[id]) names[id]={};
   if(row.name!==undefined && row.name!==null) names[id].name=row.name;
   if(row.role!==undefined && row.role!==null) names[id].role=row.role;
+  if(row.provenance!==undefined && row.provenance!==null) names[id].provenance=row.provenance;
   if(row.image_url){store[id]=row.image_url;}
 }
 
@@ -536,7 +551,7 @@ async function loadFromCloud(){
       const seed=[];
       ORDER.forEach(suit=>VALUES.forEach(val=>{
         const p=parse(DECK[suit][val]);
-        seed.push({card_id:cardId(suit,val),suit,value:val,name:p.name,role:p.role,image_url:''});
+        seed.push({card_id:cardId(suit,val),suit,value:val,name:p.name,role:p.role,provenance:'',image_url:''});
       }));
       const {error:seedErr}=await sb.from('cartes').insert(seed);
       if(seedErr) throw seedErr;
@@ -567,6 +582,11 @@ function subscribeRealtime(){
       if(roleEl && document.activeElement!==roleEl){
         const r=(names[id]&&names[id].role)||'';
         roleEl.textContent=r||'Ajouter une fonction';roleEl.dataset.empty=r?'0':'1';
+      }
+      const provEl=document.querySelector(`.provenance[data-id="${id}"]`);
+      if(provEl && document.activeElement!==provEl){
+        const pv=(names[id]&&names[id].provenance)||'';
+        provEl.textContent=pv||'© provenance de l’image';provEl.dataset.empty=pv?'0':'1';
       }
       if(row.image_url) applyImg(id,store[id]);
       setBadge('ok','● Mise à jour reçue');
