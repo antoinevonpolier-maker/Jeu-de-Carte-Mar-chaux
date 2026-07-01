@@ -122,11 +122,11 @@
   .portrait .ph span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
   .portrait .center-pip{font-size:60px;opacity:.10;position:absolute}
 
-  /* name plate — anchored to bottom, grows UPWARD so it never hits the card bottom */
+  /* name plate — position normale sous le portrait */
   .nameplate{
-    position:absolute;left:16px;right:16px;bottom:34px;z-index:5;
-    display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
-    text-align:center;max-height:150px;overflow:hidden;
+    position:absolute;left:16px;right:16px;top:200px;bottom:34px;z-index:5;
+    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
+    text-align:center;overflow:hidden;
   }
   .nameplate .rule{width:70%;height:1px;background:linear-gradient(90deg,transparent,var(--or),transparent);margin:0 0 6px;flex:0 0 auto}
   .nameplate .name{
@@ -138,7 +138,7 @@
     font-size:8.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--gris);
     margin-top:3px;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
   }
-  /* provenance / crédit image — en bas de carte, remonté, grandit vers le haut */
+  /* provenance / crédit image — ancré en bas, remonte si plusieurs lignes */
   .provenance{
     position:absolute;left:26px;right:26px;bottom:14px;z-index:5;
     font-size:6.5px;line-height:1.2;letter-spacing:.02em;color:#9c927e;
