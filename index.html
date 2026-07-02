@@ -110,7 +110,7 @@
 
   /* portrait zone */
   .portrait{
-    position:absolute;top:42px;left:30px;right:30px;height:150px;
+    position:absolute;top:42px;left:30px;right:30px;height:132px;
     border-radius:5px;overflow:hidden;z-index:3;
     background:repeating-linear-gradient(45deg,#efe8d8,#efe8d8 7px,#e8e0cd 7px,#e8e0cd 14px);
     border:1px solid var(--bord);
@@ -122,33 +122,33 @@
   .portrait .ph span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
   .portrait .center-pip{font-size:60px;opacity:.10;position:absolute}
 
-  /* name plate — position normale sous le portrait */
+  /* name plate — position sous le portrait (remonté), interlignes resserrés */
   .nameplate{
-    position:absolute;left:16px;right:16px;top:200px;bottom:34px;z-index:5;
+    position:absolute;left:16px;right:16px;top:182px;bottom:30px;z-index:5;
     display:flex;flex-direction:column;align-items:center;justify-content:flex-start;
     text-align:center;overflow:hidden;
   }
-  .nameplate .rule{width:70%;height:1px;background:linear-gradient(90deg,transparent,var(--or),transparent);margin:0 0 6px;flex:0 0 auto}
+  .nameplate .rule{width:70%;height:1px;background:linear-gradient(90deg,transparent,var(--or),transparent);margin:0 0 4px;flex:0 0 auto}
   .nameplate .name{
-    font-size:12.5px;font-weight:600;line-height:1.16;color:var(--encre);
+    font-size:12.5px;font-weight:600;line-height:1.1;color:var(--encre);
     font-family:"Hoefler Text",Georgia,serif;white-space:pre-wrap;
     padding:0 2px;width:100%;flex:0 0 auto;
   }
   .nameplate .role{
-    font-size:8.5px;letter-spacing:.10em;text-transform:uppercase;color:var(--gris);
-    margin-top:3px;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
+    font-size:8.5px;letter-spacing:.08em;text-transform:uppercase;color:var(--gris);
+    margin-top:2px;line-height:1.15;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
   }
   .nameplate .description{
-    font-size:7.5px;line-height:1.25;letter-spacing:.01em;color:#6f6656;
-    margin-top:4px;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
+    font-size:7.5px;line-height:1.15;letter-spacing:.01em;color:#6f6656;
+    margin-top:3px;font-family:Georgia,serif;width:100%;white-space:pre-wrap;flex:0 0 auto;
   }
   .nameplate .description[data-empty="1"]{color:#c8bfab;font-style:italic}
   .nameplate .description[contenteditable="true"]:hover{background:rgba(168,132,44,.10)}
   .nameplate .description[contenteditable="true"]:focus{background:rgba(168,132,44,.16);box-shadow:0 0 0 1px rgba(168,132,44,.5)}
   /* provenance / crédit image — ancré en bas, remonte si plusieurs lignes */
   .provenance{
-    position:absolute;left:26px;right:26px;bottom:14px;z-index:5;
-    font-size:6.5px;line-height:1.2;letter-spacing:.02em;color:#9c927e;
+    position:absolute;left:24px;right:24px;bottom:12px;z-index:5;
+    font-size:6.5px;line-height:1.12;letter-spacing:.02em;color:#9c927e;
     font-family:Georgia,serif;font-style:normal;text-align:center;white-space:pre-wrap;
     max-height:40px;overflow:hidden;
   }
