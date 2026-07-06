@@ -116,7 +116,14 @@
     border:1px solid var(--bord);
     display:flex;align-items:center;justify-content:center;cursor:pointer;
   }
-  .portrait img{width:100%;height:100%;object-fit:cover;display:block}
+  /* Image décalée vers le haut pour compenser la réduction du cadre (150→132).
+     L'image est rendue à l'échelle d'origine (comme dans un cadre de 150px) puis
+     alignée par le HAUT : on voit la portion haute du portrait (le visage) comme
+     avant, seul le bas est un peu plus rogné. Les recadrages retrouvent leur niveau. */
+  .portrait img{
+    position:absolute;left:0;top:0;width:100%;height:calc(100% + 18px);
+    object-fit:cover;object-position:center top;display:block;
+  }
   .portrait .ph{display:flex;flex-direction:column;align-items:center;gap:7px;color:#a99f8a;text-align:center;padding:8px}
   .portrait .ph svg{width:34px;height:34px;opacity:.7}
   .portrait .ph span{font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;font-family:Georgia,serif}
