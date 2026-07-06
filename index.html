@@ -116,13 +116,15 @@
     border:1px solid var(--bord);
     display:flex;align-items:center;justify-content:center;cursor:pointer;
   }
-  /* Image décalée vers le haut pour compenser la réduction du cadre (150→132).
-     L'image est rendue à l'échelle d'origine (comme dans un cadre de 150px) puis
-     alignée par le HAUT : on voit la portion haute du portrait (le visage) comme
-     avant, seul le bas est un peu plus rogné. Les recadrages retrouvent leur niveau. */
+  /* Reconstruit EXACTEMENT le cadrage d'origine (fenêtre 150px, image centrée, telle
+     que les recadrages manuels ont été faits), puis réduit à 88% pour tenir dans le
+     cadre de 132px. Composition intégralement préservée — rien de rogné en plus,
+     seulement 12% plus petit. Un fond neutre comble les fines marges latérales. */
+  .portrait.filled{background:#ece5d8}
   .portrait img{
-    position:absolute;left:0;top:0;width:100%;height:calc(100% + 18px);
-    object-fit:cover;object-position:center top;display:block;
+    position:absolute;left:50%;top:0;width:100%;height:150px;
+    object-fit:cover;object-position:center;display:block;
+    transform:translateX(-50%) scale(0.88);transform-origin:top center;
   }
   .portrait .ph{display:flex;flex-direction:column;align-items:center;gap:7px;color:#a99f8a;text-align:center;padding:8px}
   .portrait .ph svg{width:34px;height:34px;opacity:.7}
@@ -438,6 +440,7 @@ function render(){
 function applyImg(id,url){
   const p=document.querySelector(`.portrait[data-id="${id}"]`);
   if(!p) return;
+  p.classList.add('filled');
   p.innerHTML=`<img src="${url}" alt="" crossorigin="anonymous">`;
 }
 
